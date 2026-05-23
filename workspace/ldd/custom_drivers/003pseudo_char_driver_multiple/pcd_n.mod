@@ -1,0 +1,1 @@
+/home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/003pseudo_char_driver_multiple/pcd_n.o
