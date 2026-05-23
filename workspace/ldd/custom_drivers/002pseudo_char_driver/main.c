@@ -48,7 +48,7 @@ ssize_t pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *off
 {
 	pr_info("read requested for %zu bytes\n ", count);
 	pr_info("Current file position = %lld\n", *off);
-	if(*(buff + count) > DEV_MEM_SIZE)
+	if((*off + count) > DEV_MEM_SIZE)
 	{
 		count = DEV_MEM_SIZE - *off;
 	}
@@ -66,7 +66,7 @@ ssize_t pcd_write(struct file *filp, const char __user *buff, size_t count, loff
 {
         pr_info("write requested for %zu bytes\n ", count);
         pr_info("Current file position = %lld\n", *off);
-        if(*(buff + count) > DEV_MEM_SIZE)
+        if((*off + count) > DEV_MEM_SIZE)
         {
                 count = DEV_MEM_SIZE - *off;
         }
