@@ -67,13 +67,20 @@ struct pcdrv_private_data pcdrv_data = {
 	}
 };
 
+loff_t pcd_llseek(struct file *filp, loff_t off, int whence);
+ssize_t pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *off);
+ssize_t pcd_write(struct file *filp, const char __user *buff, size_t count, loff_t *off);
+int checkPermission(int accessMode, int perm);
+int pcd_open(struct inode *pinode, struct file *filp);
+int pcd_release(struct inode *pinode, struct file *filp);
+
 // file operations variable
 loff_t pcd_llseek(struct file *filp, loff_t off, int whence)
 {
 
         struct pcdev_private_data* pcdev_prv_data = filp->private_data;
         int size = pcdev_prv_data->size;
-        char* device_buffer = pcdev_prv_data->buffer;
+        //char* device_buffer = pcdev_prv_data->buffer;
 
 	loff_t temp = 0;
 	switch(whence)
@@ -110,11 +117,11 @@ ssize_t pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *off
 	int size = pcdev_prv_data->size;
 	char* device_buffer = pcdev_prv_data->buffer;
 	
-	if(*(buff + count) > size)
+	if((*off + count) > size)
 	{
 		count = size - *off;
 	}
-	if(copy_to_user(buff, device_buffer[*off], count))
+	if(copy_to_user(buff, &device_buffer[*off], count))
 	{
 		return -EFAULT;
 	}
@@ -132,7 +139,7 @@ ssize_t pcd_write(struct file *filp, const char __user *buff, size_t count, loff
 
         pr_info("write requested for %zu bytes\n ", count);
         pr_info("Current file position = %lld\n", *off);
-        if(*(buff + count) > size)
+        if((*off + count) > size)
         {
                 count = size - *off;
         }
@@ -140,7 +147,7 @@ ssize_t pcd_write(struct file *filp, const char __user *buff, size_t count, loff
 	{
 		return -ENOMEM;
 	}	
-        if(copy_from_user(device_buffer[*off], buff, count))
+        if(copy_from_user(&device_buffer[*off], buff, count))
         {
                 return -EFAULT;
         }
@@ -171,7 +178,7 @@ int checkPermission(int accessMode, int perm)
 int pcd_open(struct inode *pinode, struct file *filp)
 {
 	int minor;
-	minor = pinode->i_rdev;
+	minor = MINOR(pinode->i_rdev);
 	pr_info("minor access = %d\n ", minor);
 
 	struct pcdev_private_data* pcdev_data;
@@ -179,7 +186,7 @@ int pcd_open(struct inode *pinode, struct file *filp)
 	
 	filp->private_data = pcdev_data;
 	
-	if(!checkPermission(filp->f_mode, pcdev_data->perm))
+	if(checkPermission(filp->f_mode, pcdev_data->perm))
 	{
 		return 1;
 	}
@@ -213,7 +220,7 @@ static int __init pcd_init(void)
         pcdrv_data.pcd_class = class_create("PCD_CLASS_MULTIPLE_DEVICES");
         if(IS_ERR(pcdrv_data.pcd_class))
         {
-                ret = ERR_PTR(pcdrv_data.pcd_class);
+                ret = PTR_ERR(pcdrv_data.pcd_class);
                 goto unregister_chr_dev;
         }
 	int i=0;
@@ -234,7 +241,7 @@ static int __init pcd_init(void)
         
        		if(IS_ERR(pcdrv_data.pcd_device))
         	{
-                	ret = ERR_PTR(pcdrv_data.pcd_device);
+                	ret = PTR_ERR(pcdrv_data.pcd_device);
                 	goto class_del;
         	}
 	}
@@ -247,8 +254,7 @@ class_del:
 		device_destroy(pcdrv_data.pcd_class, pcdrv_data.device_number + i);
 		cdev_del(&pcdrv_data.pcdev_data[i].cdev);
 	}
-destroy_class:
-        class_destroy(pcdrv_data.pcd_class);
+class_destroy(pcdrv_data.pcd_class);
 unregister_chr_dev:
 	unregister_chrdev_region(pcdrv_data.device_number, NO_OF_DEVICES);
 out: 
