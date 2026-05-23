@@ -1,1 +1,0 @@
-savedcmd_/home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/003pseudo_char_driver_multiple/modules.order := {   echo /home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/003pseudo_char_driver_multiple/pcd_n.o; :; } > /home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/003pseudo_char_driver_multiple/modules.order

@@ -1,1 +1,0 @@
-savedcmd_/home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/004_pcd_platform_driver/pcd_device_setup.mod := printf '%s\n'   pcd_device_setup.o | awk '!x[$$0]++ { print("/home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/004_pcd_platform_driver/"$$0) }' > /home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/004_pcd_platform_driver/pcd_device_setup.mod

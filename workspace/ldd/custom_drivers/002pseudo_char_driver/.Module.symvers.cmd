@@ -1,1 +1,0 @@
-savedcmd_/home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/002pseudo_char_driver/Module.symvers :=  scripts/mod/modpost -M -m -a      -o /home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/002pseudo_char_driver/Module.symvers -T /home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/002pseudo_char_driver/modules.order -i Module.symvers -e 

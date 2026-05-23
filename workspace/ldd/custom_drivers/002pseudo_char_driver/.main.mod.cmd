@@ -1,1 +1,0 @@
-savedcmd_/home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/002pseudo_char_driver/main.mod := printf '%s\n'   main.o | awk '!x[$$0]++ { print("/home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/002pseudo_char_driver/"$$0) }' > /home/diksha/Desktop/Linux/workspace/ldd/custom_drivers/002pseudo_char_driver/main.mod
