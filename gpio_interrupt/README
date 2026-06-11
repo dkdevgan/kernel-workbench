@@ -1,0 +1,19 @@
+Compile DTS file
+dtc -@ -I dts -O dtb \
+-o gpio-test.dtbo \
+gpio-test-overlay.dts
+
+copy in boot folder
+sudo cp gpio-test.dtbo /boot/firmware/overlays/
+
+sudo reboot
+
+grep gpio-test /boot/firmware/config.txt
+
+ls -l /boot/firmware/overlays/gpio-test.dtbo
+
+// manually load overlay
+sudo dtoverlay gpio-test
+
+// test if overlay exists
+sudo dtoverlay -l
