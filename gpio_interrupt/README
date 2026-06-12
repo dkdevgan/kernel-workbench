@@ -17,3 +17,6 @@ sudo dtoverlay gpio-test
 
 // test if overlay exists
 sudo dtoverlay -l
+
+// to check gpio working
+gpiomon -c gpiochip0 -b pull-up 17
