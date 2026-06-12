@@ -20,15 +20,15 @@
 #define MAX_DEVICES 10
 
 /*Driver private data structure */
-struct pcdrv_private_data
-{
-	int total_devices;
-	dev_t device_num_base;
-	struct class *class_gpio;
-	struct device *device_gpio;
-		/* Cdev variable */
-	struct cdev gpio_cdev;
-};
+// struct pcdrv_private_data
+// {
+// 	int total_devices;
+// 	dev_t device_num_base;
+// 	struct class *class_gpio;
+// 	struct device *device_gpio;
+// 		/* Cdev variable */
+// 	struct cdev gpio_cdev;
+// };
 
 enum pcdev_names
 {
@@ -45,7 +45,18 @@ struct gpiodev_private_data
 	struct work_struct work;
 	ktime_t last_press_time;
 	struct mutex lock;
+	bool event_available;
+
+    wait_queue_head_t waitq;
+
+		int total_devices;
+	dev_t device_num_base;
+	struct class *class_gpio;
+	struct device *device_gpio;
+		/* Cdev variable */
+	struct cdev gpio_cdev;
 };
+struct gpiodev_private_data gpio_drv_data;
 
 static irqreturn_t gpio_test_irq_handler(
         int irq,
@@ -73,11 +84,16 @@ static void schedule_work_queue(struct work_struct* work)
 	mutex_unlock(&data->lock);
 	pr_info("Updated time stamp in workqueue\n");
 
+	data->event_available = true;
+
+	wake_up_interruptible(
+        &data->waitq);
+
 	pr_info("Workqueue executed\n");
 }
 
 /*Driver's private data */
-struct pcdrv_private_data gpio_drv_data;
+//struct pcdrv_private_data gpio_drv_data;
 ssize_t value_show(struct device *dev, struct device_attribute *attr,char *buf);
 ssize_t irq_count_show(struct device *dev, struct device_attribute *attr,char *buf);
 ssize_t last_press_time_show(struct device *dev, struct device_attribute *attr,char *buf);
@@ -171,16 +187,7 @@ int gpio_interrupt_platform_driver_probe(struct platform_device *pdev)
 
 	struct device *dev = &pdev->dev;
 
-	//int i = 0;
-
 	int ret;
-
-	//const char *name;
-
-
-	/*parent device node */
-	//struct device_node *parent = pdev->dev.of_node;
-	//struct device_node *child = NULL;
 
 	struct gpiodev_private_data *dev_data;
 
@@ -239,90 +246,11 @@ int gpio_interrupt_platform_driver_probe(struct platform_device *pdev)
           schedule_work_queue);
 
 	mutex_init(&dev_data->lock);
-
-	// int childCount = of_get_child_count(parent);
-	// if(!childCount){
-	// 	dev_err(dev,"No devices found\n");
-	// 	return -EINVAL;
-	// }
-
-	// dev_info(dev,"Total devices found = %d\n",childCount);
-
-	// gpio_drv_data.device_gpio = devm_kzalloc(dev, sizeof(struct device *) * childCount, GFP_KERNEL);
-
-// 	for_each_available_child_of_node(parent,child)
-// 	{
-
-// 		dev_data = devm_kzalloc(dev,sizeof(*dev_data), GFP_KERNEL);
-// 		if(!dev_data){
-// 			dev_err(dev,"Cannot allocate memory\n");
-// 			return -ENOMEM;
-// 		}
-
-// 		// if(of_property_read_string(child,"label",&name) )
-// 		// {
-// 		// 	dev_warn(dev,"Missing label information\n");
-// 		// 	snprintf(dev_data->label,sizeof(dev_data->label),"unkngpio%d",i);
-// 		// }else{
-// 		// 	strcpy(dev_data->label,name);
-// 		// 	dev_info(dev,"GPIO label = %s\n",dev_data->label);
-			
-// 		// }
-
-// 		/* Try to get GPIO from child node; fall back to of_get_named_gpio if
-// 		 * the devm_gpiod_* helper isn't available on this kernel.
-// 		 */
-// #ifdef HAVE_DEVM_GPIOD_GET_FROM_CHILD
-// 		dev_data->desc = devm_gpiod_get_from_child(dev, "bone", child,
-// 							GPIOD_ASIS, dev_data->label);
-// 		if (IS_ERR(dev_data->desc)) {
-// 			ret = PTR_ERR(dev_data->desc);
-// 			if (ret == -ENOENT)
-// 				dev_err(dev, "No GPIO has been assigned to the requested function and/or index\n");
-// 			return ret;
-// 		}
-// #else
-// 		{
-// 			int gpio_num = of_get_named_gpio(child, "gpios", 0);
-// 			if (gpio_num < 0) {
-// 				dev_err(dev, "No GPIO assigned in DT or invalid GPIO (%d)\n", gpio_num);
-// 				return gpio_num;
-// 			}
-// 			dev_data->desc = gpio_to_desc(gpio_num);
-// 			if (!dev_data->desc) {
-// 				dev_err(dev, "Failed to get gpio descriptor from gpio number %d\n", gpio_num);
-// 				return -EINVAL;
-// 			}
-// 		}
-// #endif
-
-// 		int value = gpiod_get_value(dev_data->desc);
-// 		if (value < 0) {
-// 			dev_err(dev, "Failed to read GPIO value\n");
-// 			return value;
-// 		}
-// 		pr_info("GPIO value=%d\n", value);
-
-// 		// /* set the gpio direction to output */
-// 		// ret = gpiod_direction_output(dev_data->desc,0);	
-// 		// if(ret){
-// 		// 	dev_err(dev,"gpio direction set failed \n");
-// 		// 	return ret;
-// 		// }
-
-// 		// /*Create devices under /sys/class/bone_gpios */
-// 		// gpio_drv_data.device_gpio[i] = device_create_with_groups(gpio_drv_data.class_gpio,dev,0,dev_data,gpio_attr_groups,\
-// 		// 						dev_data->label);
-// 		// if(IS_ERR(gpio_drv_data.dev[i])){
-// 		// 	dev_err(dev,"Error in device_create \n");
-// 		// 	return PTR_ERR(gpio_drv_data.dev[i]);
-// 		// }
-				
-
-// 		i++;
-
-// 	}
 	
+	init_waitqueue_head(&dev_data->waitq);
+
+	dev_data->event_available = false;
+
 	pr_info("GPIO Interrupt Platform Device Probed\n");
     return 0;
 }
@@ -366,7 +294,19 @@ loff_t gpio_lseek(struct file *filp, loff_t offset, int whence)
 ssize_t gpio_read(struct file *filp, char __user *buff, size_t count, loff_t *f_pos)
 {
 	pr_info("read called\n");
-	return 0;
+	struct gpiodev_private_data *data;
+	data = filp->private_data;
+
+	wait_event_interruptible(
+        data->waitq,
+        data->event_available);
+
+		/*copy to user */
+	if(copy_to_user(buff,&data->irq_count,count)){
+		return -EFAULT;
+	}
+
+	return count;
 }
 
 ssize_t gpio_write(struct file *filp, const char __user *buff, size_t count, loff_t *f_pos)
@@ -377,6 +317,14 @@ ssize_t gpio_write(struct file *filp, const char __user *buff, size_t count, lof
 
 int gpio_open(struct inode *inode, struct file *filp)
 {
+	struct gpiodev_private_data *data;
+
+	data = container_of(inode->i_cdev,
+                            struct gpiodev_private_data,
+                            gpio_cdev);
+
+	filp->private_data = data;
+
 	pr_info("open was successful\n");
 
 	return 0;
@@ -462,7 +410,7 @@ static void gpio_interrupt_exit(void)
 
 	device_destroy(gpio_drv_data.class_gpio,gpio_drv_data.device_num_base);
 	class_destroy(gpio_drv_data.class_gpio);
-	cdev_del(&gpio_drv_data->gpio_cdev);
+	cdev_del(&gpio_drv_data.gpio_cdev);
 	unregister_chrdev_region(gpio_drv_data.device_num_base,MAX_DEVICES);
 
 	pr_info("gpio interrupt platform driver unloaded\n");
