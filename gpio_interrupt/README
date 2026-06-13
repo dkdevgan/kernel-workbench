@@ -1,3 +1,61 @@
+Overview
+
+Platform driver for Raspberry Pi 5.
+
+Features:
+
+Device Tree Overlay
+GPIO acquisition
+IRQ registration
+Interrupt handling
+Workqueue processing
+Sysfs attributes
+Character device
+Wait queue
+Mutex synchronization
+
+
+Topic Covered:
+Platform Drivers
+Device Tree
+GPIO Subsystem
+IRQ Handling
+Workqueues
+Atomic Variables
+Mutexes
+Wait Queues
+Character Devices
+Sysfs
+Kernel/User Communication
+
+Character Device:
+/dev/gpio_interrupt_device
+
+Sysfs:
+value
+irq_count
+last_press_time
+
+Architecture:
+Button
+ ↓
+GPIO
+ ↓
+IRQ
+ ↓
+ISR
+ ↓
+Workqueue
+ ↓
+Update Count
+Update Timestamp
+ ↓
+Wake Wait Queue
+ ↓
+Userspace Read
+
+
+Commands:
 Compile DTS file
 dtc -@ -I dts -O dtb \
 -o gpio-test.dtbo \
@@ -20,3 +78,14 @@ sudo dtoverlay -l
 
 // to check gpio working
 gpiomon -c gpiochip0 -b pull-up 17
+
+insmod main.ko
+
+cat /sys/devices/platform/gpio_test/value
+
+cat /sys/devices/platform/gpio_test/irq_count
+
+cat /sys/devices/platform/gpio_test/last_press_time
+
+cat /dev/gpio_interrupt_device
+

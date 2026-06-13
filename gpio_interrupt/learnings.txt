@@ -1,0 +1,82 @@
+Topics covered:
+1. Device Tree Overlay
+2. Platform Driver Matching
+3. GPIO Descriptor API
+4. GPIO -> IRQ Mapping
+5. Interrupt Handling
+6. Top Half / Bottom Half
+7. Workqueues
+8. Sysfs
+9. Character Drivers
+10. Wait Queues
+11. Mutex Synchronization
+12. Resource Lifecycle
+13. Probe Error Handling
+14. Driver Private Data
+15. User-Kernel Communication
+
+Probelms faced:
+Overlay not loaded
+
+Cause:
+dtoverlay not applied.
+
+Fix:
+dtoverlay -l
+dtc -I fs -O dts
+
+Probe not called
+
+Cause:
+compatible mismatch.
+
+Fix:
+match OF table and DT node.
+
+GPIO busy
+
+Cause:
+gpiomon consumer.
+
+Fix:
+release line owner.
+
+Interrupt not firing
+
+Cause:
+button wiring issue.
+
+Fix:
+validated using gpiomon and direct GND shorting.
+
+request_irq failure
+
+Cause:
+IRQ already allocated.
+
+Fix:
+free_irq lifecycle.
+
+Sysfs leak
+
+Cause:
+probe failed after sysfs creation.
+
+Fix:
+cleanup in probe error path.
+
+Wait queue crash
+
+Cause:
+character driver and platform driver used different private data structures.
+
+Fix:
+unify ownership and pass correct pointer through private_data.
+
+Synchronization
+
+Cause:
+shared timestamp access.
+
+Fix:
+mutex protection.

@@ -57,6 +57,7 @@ struct gpiodev_private_data
 	struct cdev gpio_cdev;
 };
 struct gpiodev_private_data gpio_drv_data;
+struct gpiodev_private_data *g_data;
 
 static irqreturn_t gpio_test_irq_handler(
         int irq,
@@ -83,7 +84,8 @@ static void schedule_work_queue(struct work_struct* work)
 	data->last_press_time = ktime_get();
 	mutex_unlock(&data->lock);
 	pr_info("Updated time stamp in workqueue\n");
-
+	pr_info("in wokrqueue data=%px\n",
+        data);
 	data->event_available = true;
 
 	wake_up_interruptible(
@@ -146,8 +148,8 @@ ssize_t irq_count_show(struct device *dev, struct device_attribute *attr,char *b
 		return -ENODEV;
 	}
 	return sprintf(buf,
-                       "%lld\n",
-                       dev_data->irq_count);
+                       "%d\n",
+                       atomic_read(&dev_data->irq_count));
 }
 
 static DEVICE_ATTR_RO(value);
@@ -192,6 +194,7 @@ int gpio_interrupt_platform_driver_probe(struct platform_device *pdev)
 	struct gpiodev_private_data *dev_data;
 
 	dev_data = devm_kzalloc(dev,sizeof(*dev_data), GFP_KERNEL);
+	g_data = dev_data; 
 	if(!dev_data){
 		dev_err(dev,"Cannot allocate memory\n");
 		return -ENOMEM;
@@ -218,6 +221,16 @@ int gpio_interrupt_platform_driver_probe(struct platform_device *pdev)
 	}
 	dev_info(dev,"sysfs created\n");
 
+		INIT_WORK(&dev_data->work,
+          schedule_work_queue);
+
+	mutex_init(&dev_data->lock);
+	
+	init_waitqueue_head(&dev_data->waitq);
+	pr_info("in probe waitq=%px\n",
+        &dev_data->waitq);
+	dev_data->event_available = false;
+	
 	dev_data->irq = gpiod_to_irq(dev_data->desc);
 	if(dev_data->irq < 0){
 		sysfs_remove_group(&dev->kobj, &pcd_attr_group);
@@ -239,18 +252,12 @@ int gpio_interrupt_platform_driver_probe(struct platform_device *pdev)
 		dev_err(dev, "Failed to request IRQ: %d\n", ret);
 		return ret;
 	}
-	platform_set_drvdata(pdev, dev_data);
+	
 	pr_info("Requested IRQ successfully\n");
 
-	INIT_WORK(&dev_data->work,
-          schedule_work_queue);
-
-	mutex_init(&dev_data->lock);
-	
-	init_waitqueue_head(&dev_data->waitq);
-
-	dev_data->event_available = false;
-
+	pr_info("in probe data=%px\n",
+        dev_data);
+	platform_set_drvdata(pdev, dev_data);
 	pr_info("GPIO Interrupt Platform Device Probed\n");
     return 0;
 }
@@ -296,17 +303,33 @@ ssize_t gpio_read(struct file *filp, char __user *buff, size_t count, loff_t *f_
 	pr_info("read called\n");
 	struct gpiodev_private_data *data;
 	data = filp->private_data;
+	pr_info("read called 1 \n");
 
-	wait_event_interruptible(
+	if (!data) {
+        pr_err("private_data NULL\n");
+        return -EINVAL;
+	}
+	pr_info("in read data=%px\n", data);
+	pr_info("data->waitq=%px\n", &data->waitq);
+	pr_info("event=%d\n",
+        data->event_available);
+	int ret = wait_event_interruptible(
         data->waitq,
         data->event_available);
+		pr_info("read called 2 \n");
 
+	if (ret)
+        return ret;
 		/*copy to user */
-	if(copy_to_user(buff,&data->irq_count,count)){
+	int irq_count;
+
+	irq_count = atomic_read(&data->irq_count);
+	if(copy_to_user(buff,&irq_count,sizeof(irq_count))){
 		return -EFAULT;
 	}
-
-	return count;
+	data->event_available = false;
+	pr_info("read called 3 \n");
+	return sizeof(irq_count);
 }
 
 ssize_t gpio_write(struct file *filp, const char __user *buff, size_t count, loff_t *f_pos)
@@ -319,12 +342,13 @@ int gpio_open(struct inode *inode, struct file *filp)
 {
 	struct gpiodev_private_data *data;
 
-	data = container_of(inode->i_cdev,
-                            struct gpiodev_private_data,
-                            gpio_cdev);
+	// data = container_of(inode->i_cdev,
+    //                         struct gpiodev_private_data,
+    //                         gpio_cdev);
 
-	filp->private_data = data;
-
+	filp->private_data = g_data;;
+	pr_info("in open data=%px\n",
+        filp->private_data);
 	pr_info("open was successful\n");
 
 	return 0;
