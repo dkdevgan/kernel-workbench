@@ -3,7 +3,7 @@
 #include <linux/platform_device.h>
 #include <linux/string.h>
 #include <linux/fs.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #include <linux/init.h>
 #include <linux/device.h>
 #include <linux/io.h>
@@ -18,18 +18,6 @@
 #include<linux/cdev.h>
 
 #define MAX_DEVICES 10
-
-/*Driver private data structure */
-// struct pcdrv_private_data
-// {
-// 	int total_devices;
-// 	dev_t device_num_base;
-// 	struct class *class_gpio;
-// 	struct device *device_gpio;
-// 		/* Cdev variable */
-// 	struct cdev gpio_cdev;
-// };
-
 enum pcdev_names
 {
 	GPIO_INTERRUPT
@@ -84,8 +72,6 @@ static void schedule_work_queue(struct work_struct* work)
 	data->last_press_time = ktime_get();
 	mutex_unlock(&data->lock);
 	pr_info("Updated time stamp in workqueue\n");
-	pr_info("in wokrqueue data=%px\n",
-        data);
 	data->event_available = true;
 
 	wake_up_interruptible(
@@ -174,10 +160,17 @@ struct attribute_group pcd_attr_group =
 void gpio_interrupt_platform_driver_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
+
+	/* Remove sysfs attributes and free per-device resources if present */
 	sysfs_remove_group(&dev->kobj, &pcd_attr_group);
-	struct gpiodev_private_data *dev_data = dev_get_drvdata(dev);
-	cancel_work_sync(&dev_data->work);
-	free_irq(dev_data->irq, dev_data);
+	{
+		struct gpiodev_private_data *dev_data = dev_get_drvdata(dev);
+		if (dev_data) {
+			cancel_work_sync(&dev_data->work);
+			free_irq(dev_data->irq, dev_data);
+		}
+	}
+
 	pr_info("GPIO Interrupt Platform Device Removed\n");
 }
 
@@ -200,26 +193,37 @@ int gpio_interrupt_platform_driver_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
+    /* Make the driver data available to sysfs callbacks as early as possible */
+    platform_set_drvdata(pdev, dev_data);
+
 	dev_data->desc = devm_gpiod_get(&pdev->dev,
-                        "button",
-                        GPIOD_IN);
-	
+						"button",
+						GPIOD_IN);
+
+	if (IS_ERR(dev_data->desc)) {
+		ret = PTR_ERR(dev_data->desc);
+		dev_err(dev, "Failed to get GPIO descriptor: %d\n", ret);
+		return ret;
+	}
+
 	atomic_set(&dev_data->irq_count, 0);
 
-	int value = gpiod_get_value(dev_data->desc);
+	/* Read initial GPIO value for informational purposes */
+	{
+		int value = gpiod_get_value(dev_data->desc);
 		if (value < 0) {
-			dev_err(dev, "Failed to read GPIO value\n");
+			dev_err(dev, "Failed to read GPIO value: %d\n", value);
 			return value;
 		}
 		pr_info("GPIO value=%d\n", value);
+	}
 
 	ret = sysfs_create_group(&dev->kobj, &pcd_attr_group);
-	
-	if(ret){
-		dev_err(dev,"Error in creating sysfs group\n");
+	if (ret) {
+		dev_err(dev, "Error in creating sysfs group: %d\n", ret);
 		return ret;
 	}
-	dev_info(dev,"sysfs created\n");
+	dev_info(dev, "sysfs created\n");
 
 		INIT_WORK(&dev_data->work,
           schedule_work_queue);
@@ -232,22 +236,20 @@ int gpio_interrupt_platform_driver_probe(struct platform_device *pdev)
 	dev_data->event_available = false;
 	
 	dev_data->irq = gpiod_to_irq(dev_data->desc);
-	if(dev_data->irq < 0){
+	if (dev_data->irq < 0) {
 		sysfs_remove_group(&dev->kobj, &pcd_attr_group);
-		dev_err(dev,"Failed to get IRQ number for the GPIO\n");
+		dev_err(dev, "Failed to get IRQ number for the GPIO: %d\n", dev_data->irq);
 		return dev_data->irq;
 	}
 	pr_info("IRQ=%d\n", dev_data->irq);
 
-	ret = request_irq(
-        dev_data->irq,
-        gpio_test_irq_handler,
-        IRQF_TRIGGER_FALLING,
-        "gpio_test",
-        dev_data);
-	
+	ret = request_irq(dev_data->irq,
+                      gpio_test_irq_handler,
+                      IRQF_TRIGGER_FALLING,
+                      "gpio_test",
+                      dev_data);
 	if (ret) {
-		free_irq(dev_data->irq, dev_data);
+		/* request_irq failed; do not call free_irq here */
 		sysfs_remove_group(&dev->kobj, &pcd_attr_group);
 		dev_err(dev, "Failed to request IRQ: %d\n", ret);
 		return ret;
@@ -257,7 +259,7 @@ int gpio_interrupt_platform_driver_probe(struct platform_device *pdev)
 
 	pr_info("in probe data=%px\n",
         dev_data);
-	platform_set_drvdata(pdev, dev_data);
+	/* driver data already set earlier */
 	pr_info("GPIO Interrupt Platform Device Probed\n");
     return 0;
 }
@@ -303,20 +305,19 @@ ssize_t gpio_read(struct file *filp, char __user *buff, size_t count, loff_t *f_
 	pr_info("read called\n");
 	struct gpiodev_private_data *data;
 	data = filp->private_data;
-	pr_info("read called 1 \n");
 
 	if (!data) {
         pr_err("private_data NULL\n");
         return -EINVAL;
 	}
-	pr_info("in read data=%px\n", data);
-	pr_info("data->waitq=%px\n", &data->waitq);
-	pr_info("event=%d\n",
-        data->event_available);
+	if (count < sizeof(int)) {
+		pr_err("read buffer too small: %zu\n", count);
+		return -EINVAL;
+	}
+	
 	int ret = wait_event_interruptible(
         data->waitq,
         data->event_available);
-		pr_info("read called 2 \n");
 
 	if (ret)
         return ret;
@@ -328,7 +329,6 @@ ssize_t gpio_read(struct file *filp, char __user *buff, size_t count, loff_t *f_
 		return -EFAULT;
 	}
 	data->event_available = false;
-	pr_info("read called 3 \n");
 	return sizeof(irq_count);
 }
 
@@ -340,15 +340,13 @@ ssize_t gpio_write(struct file *filp, const char __user *buff, size_t count, lof
 
 int gpio_open(struct inode *inode, struct file *filp)
 {
-	struct gpiodev_private_data *data;
+	if (!g_data) {
+		pr_err("No driver data available in open\n");
+		return -ENODEV;
+	}
 
-	// data = container_of(inode->i_cdev,
-    //                         struct gpiodev_private_data,
-    //                         gpio_cdev);
-
-	filp->private_data = g_data;;
-	pr_info("in open data=%px\n",
-        filp->private_data);
+	filp->private_data = g_data;
+	pr_info("in open data=%px\n", filp->private_data);
 	pr_info("open was successful\n");
 
 	return 0;
@@ -419,7 +417,7 @@ class_del:
 cdev_del:
 	cdev_del(&gpio_drv_data.gpio_cdev);	
 unreg_chrdev:
-	unregister_chrdev_region(gpio_drv_data.device_num_base,1);
+	unregister_chrdev_region(gpio_drv_data.device_num_base,MAX_DEVICES);
 out:
 	pr_info("Module insertion failed\n");
 	return ret;
